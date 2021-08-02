@@ -70,8 +70,8 @@ class tNumber: public Token {
 auto NONE = tOperator("<None>", 0, [](Number, Number){ return 0;});
 auto ADD = tOperator("+", 0, [](Number a, Number b){ return a + b;});
 auto SUB = tOperator("-", 0, [](Number a, Number b){ return a - b;});
-auto MUL = tOperator("*", 0, [](Number a, Number b){ return a * b;});
-auto DIV = tOperator("/", 0, [](Number a, Number b){ return a / b;});
+auto MUL = tOperator("*", 1, [](Number a, Number b){ return a * b;});
+auto DIV = tOperator("/", 1, [](Number a, Number b){ return a / b;});
 
 class Calculator {
   public:
@@ -127,10 +127,12 @@ class Calculator {
       // Parse number
       if (isNumber(str[0])) {
         for (int i = 1; i < str.size(); i++) {
+          // Get substring until non-digit char
           if (not isNumber(str[i])) {
             return tokenStrTuple(new tNumber(strToNum(str.substr(0, i))), str.substr(i));
           }
         }
+        // The whole str is a number
         return tokenStrTuple(new tNumber(strToNum(str)), "");
       }
 
@@ -151,6 +153,7 @@ class Calculator {
           throw std::runtime_error(msg);
       }
     }
+
     std::vector<Token*> infixToPoistfix(std::vector<Token*> infix) {
       std::stack<tOperator*> stack;
       std::vector<Token*> postfix;
@@ -206,7 +209,7 @@ class Calculator {
           stack.pop();
           num2 = stack.top();
           stack.pop();
-          stack.push(op->eval(num1, num2));
+          stack.push(op->eval(num2, num1));
         }
       }
       
