@@ -6,6 +6,11 @@
 #include <exception>
 #include <tuple>
 
+// TODO:
+// 1. free memory
+// 2. paranthesis
+//
+
 enum TokenType {t_Op, t_Num};
 typedef int Number;
 
@@ -30,71 +35,26 @@ class tNone: public Token {
 
 class tOperator: public Token {
   public:
-    virtual Number eval(Number num1, Number num2) = 0;
-    virtual std::string toStr() const = 0;
-    virtual int priority() const = 0;
+    tOperator(std::string s, int p, std::function<Number(Number, Number)> e):
+      _str(s), _priority(p), _eval(e) {;}
+
+    Number eval(Number num1, Number num2) {
+      return _eval(num1, num2);
+    }
+
+    std::string toStr() const {
+      return _str;
+    }
+
+    virtual int priority() const {
+      return _priority;
+    }
+
+  private:
+    std::string _str;
+    int _priority;
+    std::function<Number(Number, Number)> _eval;
 };
-
-class tAdd: public tOperator {
-  public:
-   
-    virtual std::string toStr() const override {
-      return std::string("+");
-    }
-    virtual Number eval(Number num1, Number num2) override {
-      //std::cout << num1 << " + " << num2 << std::endl;
-      return num1 + num2;
-    }
-
-    virtual int priority() const override { return 0; }
-};
-
-class tSub: public tOperator {
-  public:
-   
-    virtual std::string toStr() const override {
-      return std::string("-");
-    }
-    virtual Number eval(Number num1, Number num2) override {
-      //std::cout << num1 << " - " << num2 << std::endl;
-      return num1 - num2;
-    }
-
-    virtual int priority() const override { return 0; }
-};
-
-class tMul: public tOperator {
-  public:
-   
-    virtual std::string toStr() const override {
-      return std::string("*");
-    }
-    virtual Number eval(Number num1, Number num2) override {
-      //std::cout << num1 << " - " << num2 << std::endl;
-      return num1 * num2;
-    }
-
-    virtual int priority() const override { return 1; }
-};
-
-class tDiv: public tOperator {
-  public:
-    virtual std::string toStr() const override {
-      return std::string("/");
-    }
-    virtual Number eval(Number num1, Number num2) override {
-      //std::cout << num1 << " - " << num2 << std::endl;
-      return num1 / num2;
-    }
-    virtual int priority() const override { return 1; }
-};
-
-// Singlton
-auto NONE = tNone();
-auto ADD = tAdd();
-auto SUB = tSub();
-auto MUL = tMul();
-auto DIV = tDiv();
 
 class tNumber: public Token {
   public:
@@ -104,6 +64,14 @@ class tNumber: public Token {
     }
     Number val;
 };
+
+
+// Operator tokens
+auto NONE = tOperator("<None>", 0, [](Number, Number){ return 0;});
+auto ADD = tOperator("+", 0, [](Number a, Number b){ return a + b;});
+auto SUB = tOperator("-", 0, [](Number a, Number b){ return a - b;});
+auto MUL = tOperator("*", 0, [](Number a, Number b){ return a * b;});
+auto DIV = tOperator("/", 0, [](Number a, Number b){ return a / b;});
 
 class Calculator {
   public:
@@ -141,14 +109,14 @@ class Calculator {
     }
 
   private:
-    typedef std::tuple<Token*, std::string> lexerReturn;
+    typedef std::tuple<Token*, std::string> tokenStrTuple;
     std::tuple<Token*, std::string> getNextToken(std::string str) {
       std::string sToken;
       std::cout << "Parsing " << str << std::endl;
 
       // Handle empty string.
       if (str.size() == 0) {
-        return lexerReturn(&NONE, "");
+        return tokenStrTuple(&NONE, "");
       }
 
       // Ignore spaces and continue parsing.
@@ -160,29 +128,28 @@ class Calculator {
       if (isNumber(str[0])) {
         for (int i = 1; i < str.size(); i++) {
           if (not isNumber(str[i])) {
-            std::cout << "hhh" << str.substr(0, i) << std::endl;
-            return lexerReturn(new tNumber(strToNum(str.substr(0, i))), str.substr(i));
+            return tokenStrTuple(new tNumber(strToNum(str.substr(0, i))), str.substr(i));
           }
         }
-        return lexerReturn(new tNumber(strToNum(str)), "");
+        return tokenStrTuple(new tNumber(strToNum(str)), "");
       }
 
       // Parse operator
       switch (str[0]) {
         case '+':
-          return lexerReturn(&ADD, str.substr(1));
+          return tokenStrTuple(&ADD, str.substr(1));
         case '-':
-          return lexerReturn(&SUB, str.substr(1));
+          return tokenStrTuple(&SUB, str.substr(1));
         case '*':
-          return lexerReturn(&MUL, str.substr(1));
+          return tokenStrTuple(&MUL, str.substr(1));
         case '/':
-          return lexerReturn(&DIV, str.substr(1));
+          return tokenStrTuple(&DIV, str.substr(1));
         default:
           std::string msg("Unknown operator: \'");
           msg += str[0];
           msg += '\'';
           throw std::runtime_error(msg);
-      }     
+      }
     }
     std::vector<Token*> infixToPoistfix(std::vector<Token*> infix) {
       std::stack<tOperator*> stack;
