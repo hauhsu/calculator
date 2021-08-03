@@ -5,11 +5,14 @@
 #include <cctype>
 #include <exception>
 #include <tuple>
+#include <cstdlib>
 
 // TODO:
 // 1. free memory
 // 2. paranthesis
 //
+//
+bool DEBUG = false;
 
 enum TokenType {t_Op, t_Num};
 typedef int Number;
@@ -76,7 +79,9 @@ auto DIV = tOperator("/", 1, [](Number a, Number b){ return a / b;});
 class Calculator {
   public:
     Number eval(std::string exp) {
-      std::cout << "Calculating \"" << exp << "\"" << std::endl;
+      if (DEBUG) {
+        std::cout << "Calculating \"" << exp << "\"" << std::endl;
+      }
       std::vector<Token*> tokens;
       Token *token;
       std::string remain;
@@ -88,21 +93,26 @@ class Calculator {
         std::tie(token, remain) = getNextToken(remain);
       }
 
-      std::cout << "Infix: ";
-      for (auto& t: tokens) {
-        std::cout << t->toStr() << " ";
+      if (DEBUG) {
+        std::cout << "Infix: ";
+        for (auto& t: tokens) {
+          std::cout << t->toStr() << " ";
+        }
+        std::cout << std::endl;
       }
-      std::cout << std::endl;
 
 
-      std::cout << "Posfix: ";
       auto postfix = infixToPoistfix(tokens);
-      for (auto& t: postfix) {
-        std::cout << t->toStr() << " ";
+      if (DEBUG) {
+        std::cout << "Posfix: ";
+        for (auto& t: postfix) {
+          std::cout << t->toStr() << " ";
+        }
+        std::cout << std::endl;
       }
-      std::cout << std::endl;
 
-      std::cout << "Result: " << evalPostfix(postfix) << std::endl;
+      // Print result
+      std::cout << evalPostfix(postfix) << std::endl;
 
 
       return 0; 
@@ -112,7 +122,9 @@ class Calculator {
     typedef std::tuple<Token*, std::string> tokenStrTuple;
     std::tuple<Token*, std::string> getNextToken(std::string str) {
       std::string sToken;
-      std::cout << "Parsing " << str << std::endl;
+      if (DEBUG) {
+        std::cout << "Parsing " << str << std::endl;
+      }
 
       // Handle empty string.
       if (str.size() == 0) {
@@ -148,8 +160,6 @@ class Calculator {
           return tokenStrTuple(&DIV, str.substr(1));
         default:
           std::string msg("Unknown operator: \'");
-          msg += str[0];
-          msg += '\'';
           throw std::runtime_error(msg);
       }
     }
@@ -221,7 +231,13 @@ class Calculator {
 
 int main(int argc, char *argv[])
 {
+  const char* env_p = std::getenv("DEBUG");
+  if(env_p && env_p == std::string("TRUE")) {
+    DEBUG = true;
+  }
   auto calculator = Calculator();
-  calculator.eval(argv[1]);
+  if (argc == 2) {
+    calculator.eval(argv[1]);
+  }
   return 0;
 }
