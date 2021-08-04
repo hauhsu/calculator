@@ -24,6 +24,7 @@ main() {
   test_case "   " "0"
   test_case "1+    4*7*2*9-89" "416"
   test_case "(1+3)*4" "16"
+  test_case "((1+3))*4" "16"
 }
 
 main "$@"

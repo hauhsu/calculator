@@ -14,12 +14,10 @@
 //
 bool DEBUG = false;
 
-enum TokenType {t_Op, t_Num};
 typedef int Number;
 
 class Token {
   public:
-    TokenType type;
     virtual std::string toStr() const = 0;
 };
 
@@ -68,6 +66,20 @@ class tNumber: public Token {
     Number val;
 };
 
+class tLeftParenthesis: public Token {
+  public:
+    virtual std::string toStr() const {
+      return std::string("(");
+    }
+};
+
+class tRightParenthesis: public Token {
+  public:
+    virtual std::string toStr() const {
+      return std::string(")");
+    }
+};
+
 
 // Operator tokens
 auto NONE = tOperator("<None>", 0, [](Number, Number){ return 0;});
@@ -75,6 +87,8 @@ auto ADD = tOperator("+", 0, [](Number a, Number b){ return a + b;});
 auto SUB = tOperator("-", 0, [](Number a, Number b){ return a - b;});
 auto MUL = tOperator("*", 1, [](Number a, Number b){ return a * b;});
 auto DIV = tOperator("/", 1, [](Number a, Number b){ return a / b;});
+auto LEFT_PARENTHESIS = tLeftParenthesis();
+auto RIGHT_PARENTHESIS = tRightParenthesis();
 
 class Calculator {
   public:
@@ -102,7 +116,7 @@ class Calculator {
       }
 
 
-      auto postfix = infixToPoistfix(tokens);
+      auto postfix = infixToPostfix(tokens);
       if (DEBUG) {
         std::cout << "Posfix: ";
         for (auto& t: postfix) {
@@ -115,7 +129,7 @@ class Calculator {
       std::cout << evalPostfix(postfix) << std::endl;
 
 
-      return 0; 
+      return 0;
     }
 
   private:
@@ -158,22 +172,37 @@ class Calculator {
           return tokenStrTuple(&MUL, str.substr(1));
         case '/':
           return tokenStrTuple(&DIV, str.substr(1));
+        case '(':
+          return tokenStrTuple(&LEFT_PARENTHESIS, str.substr(1));
+        case ')':
+          return tokenStrTuple(&RIGHT_PARENTHESIS, str.substr(1));
         default:
           std::string msg("Unknown operator: \'");
           throw std::runtime_error(msg);
       }
     }
 
-    std::vector<Token*> infixToPoistfix(std::vector<Token*> infix) {
-      std::stack<tOperator*> stack;
+    std::vector<Token*> infixToPostfix(std::vector<Token*> infix) {
+      std::stack<Token*> stack;
       std::vector<Token*> postfix;
 
       for (auto& t: infix) {
         if (dynamic_cast<tNumber*>(t)) {
           postfix.push_back(t);
+        } else if (dynamic_cast<tLeftParenthesis*>(t)) {
+          stack.push(t);
+        } else if (dynamic_cast<tRightParenthesis*>(t)) {
+          while (not dynamic_cast<tLeftParenthesis*>(stack.top())) {
+            // pop until encounter '('
+            postfix.push_back(stack.top());
+            stack.pop();
+          }
+          stack.pop();
         } else if (dynamic_cast<tOperator*>(t)) {
           auto op = dynamic_cast<tOperator*>(t);
-          while (not stack.empty() && (stack.top()->priority() >= op->priority())) {
+          while (not stack.empty() &&
+                 not dynamic_cast<tLeftParenthesis*>(stack.top()) &&
+                 (dynamic_cast<tOperator*>(stack.top())->priority() >= op->priority())) {
             postfix.push_back(stack.top());
             stack.pop();
           }
@@ -222,7 +251,7 @@ class Calculator {
           stack.push(op->eval(num2, num1));
         }
       }
-      
+
       assert(stack.size() == 1);
       return stack.top();
     }

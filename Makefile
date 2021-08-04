@@ -3,7 +3,7 @@ exe = calculator
 all: $(exe)
 
 $(exe): $(src)
-	g++ main.cpp -std=c++11 -o $@
+	g++ main.cpp -std=c++11 -g -o $@
 
-test:
+test: $(exe)
 	@./test.sh
