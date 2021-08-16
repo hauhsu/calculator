@@ -8,8 +8,10 @@
 #include <cstdlib>
 
 // TODO:
-// 1. free memory
-// 2. paranthesis
+// [v] free memory
+// [v] paranthesis
+// [ ] floating point support
+// [ ] EOF class
 //
 //
 bool DEBUG = false;
@@ -18,6 +20,7 @@ typedef int Number;
 
 class Token {
   public:
+    virtual ~Token(){};
     virtual std::string toStr() const = 0;
 };
 
@@ -81,29 +84,32 @@ class tRightParenthesis: public Token {
 };
 
 
-// Operator tokens
-auto NONE = tOperator("<None>", 0, [](Number, Number){ return 0;});
-auto ADD = tOperator("+", 0, [](Number a, Number b){ return a + b;});
-auto SUB = tOperator("-", 0, [](Number a, Number b){ return a - b;});
-auto MUL = tOperator("*", 1, [](Number a, Number b){ return a * b;});
-auto DIV = tOperator("/", 1, [](Number a, Number b){ return a / b;});
-auto LEFT_PARENTHESIS = tLeftParenthesis();
-auto RIGHT_PARENTHESIS = tRightParenthesis();
+
+typedef std::shared_ptr<Token> TokenPtr;
 
 class Calculator {
   public:
+    Calculator():
+      _ENDOFFILE(new tOperator("<EOF>", 0, [](Number, Number){ return 0;})),
+      _ADD(new tOperator("+", 0, [](Number a, Number b){ return a + b;})),
+      _SUB(new tOperator("-", 0, [](Number a, Number b){ return a - b;})),
+      _MUL(new tOperator("*", 1, [](Number a, Number b){ return a * b;})),
+      _DIV(new tOperator("/", 1, [](Number a, Number b){ return a / b;})),
+      _LEFT_PARENTHESIS(new tLeftParenthesis()),
+      _RIGHT_PARENTHESIS(new tRightParenthesis()){;}
+
     Number eval(std::string exp) {
       if (DEBUG) {
         std::cout << "Calculating \"" << exp << "\"" << std::endl;
       }
-      std::vector<Token*> tokens;
-      Token *token;
+      std::vector<TokenPtr> tokens;
+      TokenPtr token;
       std::string remain;
 
       // Read tokens
       std::tie(token, remain) = getNextToken(exp);
-      while (token != &NONE) {
-        tokens.push_back(token);
+      while (token.get() != _ENDOFFILE.get()) {
+        tokens.emplace_back(token);
         std::tie(token, remain) = getNextToken(remain);
       }
 
@@ -133,16 +139,15 @@ class Calculator {
     }
 
   private:
-    typedef std::tuple<Token*, std::string> tokenStrTuple;
-    std::tuple<Token*, std::string> getNextToken(std::string str) {
-      std::string sToken;
+    typedef std::tuple<TokenPtr, std::string> tokenStrTuple;
+    std::tuple<TokenPtr, std::string> getNextToken(std::string str) {
       if (DEBUG) {
         std::cout << "Parsing " << str << std::endl;
       }
 
       // Handle empty string.
       if (str.size() == 0) {
-        return tokenStrTuple(&NONE, "");
+        return tokenStrTuple(_ENDOFFILE, "");
       }
 
       // Ignore spaces and continue parsing.
@@ -165,48 +170,48 @@ class Calculator {
       // Parse operator
       switch (str[0]) {
         case '+':
-          return tokenStrTuple(&ADD, str.substr(1));
+          return tokenStrTuple(_ADD, str.substr(1));
         case '-':
-          return tokenStrTuple(&SUB, str.substr(1));
+          return tokenStrTuple(_SUB, str.substr(1));
         case '*':
-          return tokenStrTuple(&MUL, str.substr(1));
+          return tokenStrTuple(_MUL, str.substr(1));
         case '/':
-          return tokenStrTuple(&DIV, str.substr(1));
+          return tokenStrTuple(_DIV, str.substr(1));
         case '(':
-          return tokenStrTuple(&LEFT_PARENTHESIS, str.substr(1));
+          return tokenStrTuple(_LEFT_PARENTHESIS, str.substr(1));
         case ')':
-          return tokenStrTuple(&RIGHT_PARENTHESIS, str.substr(1));
+          return tokenStrTuple(_RIGHT_PARENTHESIS, str.substr(1));
         default:
           std::string msg("Unknown operator: \'");
           throw std::runtime_error(msg);
       }
     }
 
-    std::vector<Token*> infixToPostfix(std::vector<Token*> infix) {
-      std::stack<Token*> stack;
-      std::vector<Token*> postfix;
+    std::vector<TokenPtr> infixToPostfix(std::vector<TokenPtr> infix) {
+      std::stack<TokenPtr> stack;
+      std::vector<TokenPtr> postfix;
 
       for (auto& t: infix) {
-        if (dynamic_cast<tNumber*>(t)) {
+        if (dynamic_cast<tNumber*>(t.get())) {
           postfix.push_back(t);
-        } else if (dynamic_cast<tLeftParenthesis*>(t)) {
+        } else if (dynamic_cast<tLeftParenthesis*>(t.get())) {
           stack.push(t);
-        } else if (dynamic_cast<tRightParenthesis*>(t)) {
-          while (not dynamic_cast<tLeftParenthesis*>(stack.top())) {
+        } else if (dynamic_cast<tRightParenthesis*>(t.get())) {
+          while (not dynamic_cast<tLeftParenthesis*>(stack.top().get())) {
             // pop until encounter '('
             postfix.push_back(stack.top());
             stack.pop();
           }
           stack.pop();
-        } else if (dynamic_cast<tOperator*>(t)) {
-          auto op = dynamic_cast<tOperator*>(t);
+        } else if (dynamic_cast<tOperator*>(t.get())) {
+          auto op = std::dynamic_pointer_cast<tOperator>(t);
           while (not stack.empty() &&
-                 not dynamic_cast<tLeftParenthesis*>(stack.top()) &&
-                 (dynamic_cast<tOperator*>(stack.top())->priority() >= op->priority())) {
+                 not dynamic_cast<tLeftParenthesis*>(stack.top().get()) &&
+                 (dynamic_cast<tOperator*>(stack.top().get())->priority() >= op->priority())) {
             postfix.push_back(stack.top());
             stack.pop();
           }
-          stack.push(op);
+          stack.push(t);
         } else {
           std::string msg("Unknown token: ");
           msg += t->toStr();
@@ -232,18 +237,18 @@ class Calculator {
       return std::stoi(s);
     }
 
-    Number evalPostfix(std::vector<Token*> postfix) {
+    Number evalPostfix(std::vector<TokenPtr> postfix) {
       if (postfix.size() == 0)
         return 0;
 
       std::stack<Number> stack;
       Number num1, num2;
-      tNumber* num;
-      tOperator* op;
       for (auto& token: postfix) {
-        if ((num = dynamic_cast<tNumber*>(token))) {
+        std::shared_ptr<tNumber> num(std::dynamic_pointer_cast<tNumber>(token));
+        std::shared_ptr<tOperator> op(std::dynamic_pointer_cast<tOperator>(token));
+        if (num) {
           stack.push(num->val);
-        } else if ((op = dynamic_cast<tOperator*>(token))){
+        } else if (op){
           num1 = stack.top();
           stack.pop();
           num2 = stack.top();
@@ -255,6 +260,10 @@ class Calculator {
       assert(stack.size() == 1);
       return stack.top();
     }
+
+    std::shared_ptr<tOperator> _ENDOFFILE, _ADD, _SUB, _MUL, _DIV;
+    std::shared_ptr<tLeftParenthesis> _LEFT_PARENTHESIS;
+    std::shared_ptr<tRightParenthesis> _RIGHT_PARENTHESIS;
 };
 
 
